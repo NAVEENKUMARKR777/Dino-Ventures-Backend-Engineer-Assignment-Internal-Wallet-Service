@@ -13,7 +13,7 @@ from app.schemas import (
     ErrorResponse, Asset as AssetSchema
 )
 from app.wallet_service import WalletService
-from app.startup import initialize_database
+from app.database_init import init_database
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -38,14 +38,17 @@ app.add_middleware(
 @app.on_event("startup")
 async def startup_event():
     """Initialize database on startup"""
-    logger.info("🚀 Starting Dino Ventures Wallet Service...")
-    
-    # Initialize database tables and seed data
-    if initialize_database():
-        logger.info("✅ Database initialization completed")
-    else:
-        logger.error("❌ Database initialization failed")
-        # Don't raise exception to allow service to start for debugging
+    try:
+        logger.info("🚀 Starting Dino Ventures Wallet Service...")
+        
+        # Initialize database tables and seed data
+        if init_database():
+            logger.info("✅ Database initialization completed")
+        else:
+            logger.warning("⚠️ Database initialization failed, but service will continue")
+    except Exception as e:
+        logger.error(f"❌ Startup error: {e}")
+        # Don't raise exception to allow service to start
 
 @app.get("/")
 async def root():
