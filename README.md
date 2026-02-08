@@ -1,282 +1,463 @@
-# Dino Ventures Internal Wallet Service
+# Dino Ventures - Internal Wallet Service
 
-A production-ready wallet service for gaming platforms and loyalty rewards systems. Built with Python, FastAPI, and SQLite for reliable Railway deployment.
+[![Tests](https://img.shields.io/badge/tests-passing-brightgreen)](TEST_RESULTS.md)
+[![API](https://img.shields.io/badge/API-FastAPI-009688)](http://localhost:8001/docs)
+[![Python](https://img.shields.io/badge/python-3.11-blue)](https://www.python.org/)
+[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-15-336791)](https://www.postgresql.org/)
 
-## 🎯 Problem Statement
+A production-ready wallet service implementing a **double-entry ledger system** for managing application credits (Gold Coins, Diamonds, Loyalty Points) with complete transactional integrity.
 
-This service manages virtual credits (Gold Coins, Diamonds, Loyalty Points) in a closed-loop system where data integrity is paramount. Every transaction is accurately recorded, balances never go negative or out of sync, and no transactions are lost—even under heavy traffic or system failures.
+> **✅ Status:** All endpoints tested and verified. See [TEST_RESULTS.md](TEST_RESULTS.md) for detailed test report.
 
-## 🏗️ Architecture Overview
+## 🎯 Features
 
-### Technology Stack
-- **Backend Framework**: FastAPI (Python 3.11)
-- **Database**: SQLite (for Railway compatibility) with ACID transactions
-- **ORM**: Native SQLite with custom ORM
-- **API Documentation**: OpenAPI/Swagger (auto-generated)
+### Core Requirements
+- ✅ **Double-Entry Ledger Architecture**: Full audit trail of all transactions
+- ✅ **ACID Transactions**: PostgreSQL with row-level locking
+- ✅ **Idempotency**: Prevent duplicate transactions using idempotency keys
+- ✅ **Concurrency Control**: Row-level locks and optimistic locking
+- ✅ **Deadlock Avoidance**: Consistent lock ordering (alphabetically by account ID)
+- ✅ **RESTful API**: FastAPI with automatic OpenAPI documentation
+- ✅ **Docker Support**: Full containerization with docker-compose
+- ✅ **Railway Deployment**: Ready for cloud deployment
 
-### Key Features
-- ✅ **Ledger-Based Architecture**: Double-entry bookkeeping for complete auditability
-- ✅ **ACID Compliance**: All transactions are atomic, consistent, isolated, and durable
-- ✅ **Concurrency Control**: Database-level locking for race condition prevention
-- ✅ **Idempotency**: Optional keys to prevent duplicate transaction processing
-- ✅ **RESTful API**: Clean, documented endpoints for all operations
-- ✅ **Health Monitoring**: Built-in health checks and monitoring
-- ✅ **Production Ready**: Optimized for Railway deployment
+### Transaction Types
+1. **Wallet Top-up**: User purchases credits (assumes working payment system)
+2. **Bonus/Incentive**: System issues free credits (referrals, promotions)
+3. **Purchase/Spend**: User spends credits for in-app services
+
+## 🏗️ Technology Stack
+
+### Backend
+- **Language**: Python 3.11
+- **Framework**: FastAPI (high-performance async framework)
+- **Database**: PostgreSQL 15
+- **ORM**: SQLAlchemy 2.0 (async)
+- **Validation**: Pydantic v2
+
+### Why This Stack?
+- **Python**: Excellent ecosystem, readable, maintainable
+- **FastAPI**: Auto-generated OpenAPI docs, async support, type hints
+- **PostgreSQL**: ACID compliance, row-level locking, excellent concurrency
+- **SQLAlchemy**: Mature ORM with advanced transaction management
+- **Docker**: Reproducible environments, easy deployment
 
 ## 🚀 Quick Start
 
-### Railway Deployment
-1. **Push to GitHub**
-   ```bash
-   git add .
-   git commit -m "Deploy wallet service"
-   git push origin main
-   ```
+> **📌 Note:** The API runs on **port 8001** (mapped from container port 8000) to avoid conflicts with other services.
 
-2. **Deploy to Railway**
-   - Go to [railway.app](https://railway.app)
-   - Click "New Project" → "Deploy from GitHub repo"
-   - Select your repository
-   - Railway will automatically detect and deploy the Python app
+### Prerequisites
+- Docker and Docker Compose installed
+- Or: Python 3.11+ and PostgreSQL 15+
 
-3. **Verify Deployment**
-   ```bash
-   # Health check
-   curl https://your-app.railway.app/
-   
-   # View API documentation
-   # Open https://your-app.railway.app/docs
-   ```
+### Option 1: Docker (Recommended)
 
-### Local Development
+```bash
+# Clone the repository
+git clone <repository-url>
+cd "Dino Ventures Backend Engineer Assignment Internal Wallet Service"
+
+# Start all services (database + API)
+docker-compose up -d
+
+# Check logs
+docker-compose logs -f api
+
+# API will be available at http://localhost:8001
+# API Documentation at http://localhost:8001/docs
+```
+
+The database will be automatically seeded with:
+- 3 Asset types (Gold Coins, Diamonds, Loyalty Points)
+- 1 System account (Treasury)
+- 2 User accounts with initial balances
+
+### Option 2: Local Development
+
 ```bash
 # Install dependencies
 pip install -r requirements.txt
 
-# Run locally
-python main.py
+# Set environment variables
+export DATABASE_URL="postgresql+asyncpg://wallet_user:wallet_pass@localhost:5432/wallet_db"
+
+# Start PostgreSQL (if not running)
+# Run migrations and seed data
+python -m app.scripts.seed
+
+# Start the API server
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8001
 ```
 
-## 📊 Database Schema
+### Verify Setup
 
-### Core Tables
+```bash
+# Check API health
+curl http://localhost:8001/health
 
-#### Assets
-Defines virtual currencies available in the system.
-- `Gold Coins (GC)`: Primary in-game currency
-- `Diamonds (DI)`: Premium currency for exclusive items  
-- `Loyalty Points (LP)`: Reward points for user engagement
+# Get all users
+curl http://localhost:8001/api/v1/users
 
-#### Wallets
-User and system wallets with balance tracking.
-- **System Wallets**: Treasury accounts for fund sources
-- **User Wallets**: Individual user balances per asset
+# Check a user's balance
+curl http://localhost:8001/api/v1/wallets/user_001/balance
+```
 
-#### Transactions
-Transaction records with full metadata and status tracking.
-- **Types**: `topup`, `bonus`, `purchase`
-- **Idempotency**: Optional keys to prevent duplicates
+## 📚 API Documentation
 
-#### Ledger Entries
-Double-entry ledger with complete balance snapshots.
-- **Audit Trail**: Before/after balances for every transaction
-- **Integrity**: Ensures debits always equal credits
+Once running, visit:
+- **Swagger UI**: http://localhost:8001/docs
+- **ReDoc**: http://localhost:8001/redoc
+- **Test Results**: [TEST_RESULTS.md](TEST_RESULTS.md)
 
-## 🔄 Core Transaction Flows
+### Key Endpoints
 
-### 1. Wallet Top-up (Purchase)
-```json
-POST /transaction
+#### Transaction Operations
+```bash
+# 1. Wallet Top-up (Purchase)
+POST /api/v1/transactions/topup
 {
-  "transaction_type": "topup",
   "user_id": "user_001",
-  "asset_code": "GC",
-  "amount": 100.00,
-  "description": "Purchased 100 Gold Coins"
+  "asset_type": "GOLD_COINS",
+  "amount": "100.00",
+  "idempotency_key": "unique-key-123",
+  "metadata": {
+    "payment_id": "pay_xyz",
+    "payment_method": "credit_card"
+  }
 }
-```
-**Flow**: System Treasury → User Wallet
 
-### 2. Bonus/Incentive
-```json
-POST /transaction
+# 2. Bonus/Incentive
+POST /api/v1/transactions/bonus
 {
-  "transaction_type": "bonus",
-  "user_id": "user_001", 
-  "asset_code": "LP",
-  "amount": 50.00,
-  "description": "Referral bonus"
-}
-```
-**Flow**: System Treasury → User Wallet
-
-### 3. Purchase/Spend
-```json
-POST /transaction
-{
-  "transaction_type": "purchase",
   "user_id": "user_001",
-  "asset_code": "GC", 
-  "amount": 25.00,
-  "description": "Bought in-game item"
+  "asset_type": "LOYALTY_POINTS",
+  "amount": "50.00",
+  "idempotency_key": "bonus-key-456",
+  "metadata": {
+    "reason": "referral_bonus",
+    "referral_code": "REF123"
+  }
+}
+
+# 3. Purchase/Spend
+POST /api/v1/transactions/spend
+{
+  "user_id": "user_001",
+  "asset_type": "GOLD_COINS",
+  "amount": "25.00",
+  "idempotency_key": "spend-key-789",
+  "metadata": {
+    "item_id": "skin_premium_001",
+    "item_name": "Dragon Skin"
+  }
 }
 ```
-**Flow**: User Wallet → System Treasury
 
-## 🛡️ Concurrency & Reliability Strategy
+#### Balance & Transaction History
+```bash
+# Get wallet balance
+GET /api/v1/wallets/{user_id}/balance
 
-### Database-Level Concurrency Control
-- **SQLite Transactions**: ACID compliance with immediate consistency
-- **Row-Level Locking**: Database handles concurrent access
-- **Transaction Isolation**: Each transaction runs in isolation
+# Get transaction history
+GET /api/v1/wallets/{user_id}/transactions?limit=50&offset=0
 
-### Idempotency Implementation
-- **Idempotency Keys**: Optional unique identifiers per request
-- **Duplicate Detection**: Pre-transaction validation
-- **Consistent Responses**: Return original transaction for duplicates
+# Get specific transaction
+GET /api/v1/transactions/{transaction_id}
+```
 
-### ACID Transaction Guarantees
-- **Atomicity**: All-or-nothing transaction execution
-- **Consistency**: Database always remains in valid state
-- **Isolation**: Concurrent transactions don't interfere
-- **Durability**: Committed transactions survive failures
+## 🏛️ Architecture
 
-## 📡 API Endpoints
+### Double-Entry Ledger System
 
-### Assets & Balances
-- `GET /assets` - List all available assets
-- `GET /balance/{user_id}` - Get all user balances
-- `GET /balance/{user_id}/{asset_code}` - Get specific balance
+Every transaction creates **two ledger entries** (debit and credit) ensuring:
+- Complete audit trail
+- Balance integrity (sum of all entries = 0)
+- Historical accuracy
 
-### Transactions
-- `POST /transaction` - Process wallet transaction
-- `GET /transaction/{user_id}/history` - Get transaction history
+```
+Example: User purchases 100 Gold Coins for $10
 
-### System
-- `GET /` - Health check
-- `GET /health` - Detailed health check with DB status
-- `GET /docs` - Interactive API documentation
+Ledger Entries:
+1. DEBIT  - User Account    +100 GOLD_COINS
+2. CREDIT - System Account  -100 GOLD_COINS
 
-## 🧪 Testing & Examples
+Transaction Record:
+- Type: TOPUP
+- Amount: 100
+- Status: COMPLETED
+- Metadata: {payment_id: "pay_xyz"}
+```
 
-### Sample API Calls
+### Database Schema
 
-1. **Check User Balance**
-   ```bash
-   curl https://your-app.railway.app/balance/user_001
-   ```
+```sql
+-- Core Tables
+accounts: Wallet accounts (users, system)
+asset_types: Currency definitions (Gold Coins, etc.)
+transactions: Transaction records
+ledger_entries: Double-entry bookkeeping
+idempotency_keys: Prevent duplicate operations
 
-2. **Process Top-up**
-   ```bash
-   curl -X POST https://your-app.railway.app/transaction \
-     -H "Content-Type: application/json" \
-     -d '{
-       "transaction_type": "topup",
-       "user_id": "user_001",
-       "asset_code": "GC",
-       "amount": 100.00,
-       "description": "Test top-up"
-     }'
-   ```
+-- Key Indexes
+- user_id, asset_type for fast balance queries
+- idempotency_key for duplicate detection
+- transaction_id for audit trails
+```
 
-3. **Process Purchase**
-   ```bash
-   curl -X POST https://your-app.railway.app/transaction \
-     -H "Content-Type: application/json" \
-     -d '{
-       "transaction_type": "purchase",
-       "user_id": "user_001", 
-       "asset_code": "GC",
-       "amount": 25.00,
-       "description": "Test purchase"
-     }'
-   ```
+### Concurrency Strategy
 
-4. **View Transaction History**
-   ```bash
-   curl https://your-app.railway.app/transaction/user_001/history
-   ```
+1. **Row-Level Locking**: `SELECT ... FOR UPDATE` on accounts
+2. **Lock Ordering**: Always lock accounts in alphabetical order to prevent deadlocks
+3. **Optimistic Locking**: Version numbers on critical records
+4. **Idempotency**: Unique keys prevent duplicate transactions
+5. **Transaction Isolation**: `SERIALIZABLE` level for critical operations
 
-## 🐳 Railway Configuration
+### Deadlock Prevention
 
-### Deployment Setup
-- **Builder**: NIXPACKS (Railway's Python builder)
-- **Start Command**: `python main.py`
-- **Health Check**: `/` endpoint with 300s timeout
-- **Port**: 8000 (Railway's default)
+```python
+# Always acquire locks in consistent order (alphabetical)
+account_ids = sorted([source_account_id, dest_account_id])
+locked_accounts = []
+for account_id in account_ids:
+    account = await session.execute(
+        select(Account)
+        .where(Account.id == account_id)
+        .with_for_update()  # Row-level lock
+    )
+    locked_accounts.append(account)
+```
 
-### Database Strategy
-- **SQLite**: File-based database for Railway compatibility
-- **Auto-Seeding**: Initial data created on first run
-- **ACID Compliance**: Full transaction support
+## 🧪 Testing
 
-## 📈 Performance Considerations
+### Automated Testing
 
-### Database Optimization
-- **Indexes**: Primary keys and foreign keys for fast lookups
-- **Connection Management**: Single connection with proper cleanup
-- **Query Optimization**: Efficient SQL with proper joins
+```bash
+# Run unit tests
+pytest tests/ -v
 
-### Concurrency Handling
-- **Database Locking**: SQLite handles concurrent access automatically
-- **Transaction Isolation**: Each transaction runs independently
-- **Error Recovery**: Automatic rollback on failures
+# Run with coverage
+pytest tests/ --cov=app --cov-report=html
+```
 
-## 🔧 Configuration
+### Manual API Testing
+
+All endpoints have been thoroughly tested. See **[TEST_RESULTS.md](TEST_RESULTS.md)** for complete test report.
+
+**Quick Test Commands:**
+
+```powershell
+# Health check
+curl http://localhost:8001/health
+
+# Get user balance
+Invoke-RestMethod -Uri "http://localhost:8001/api/v1/wallets/user_001/balance"
+
+# Create a top-up transaction
+$body = @{
+    user_id = "user_001"
+    asset_type = "GOLD_COINS"
+    amount = "100.00"
+    idempotency_key = "test_$(Get-Date -Format 'yyyyMMddHHmmss')"
+    metadata = @{payment_id = "pay_123"}
+} | ConvertTo-Json
+
+Invoke-RestMethod -Uri "http://localhost:8001/api/v1/transactions/topup" `
+    -Method POST -Body $body -ContentType "application/json"
+```
+
+### Test Results Summary
+
+✅ **All 10 endpoint categories tested and verified:**
+- Health & System endpoints
+- User management
+- Balance queries
+- Transaction operations (Topup, Bonus, Spend)
+- Transaction history
+- Idempotency verification
+- Error handling
+
+**Success Rate: 100%** - See [TEST_RESULTS.md](TEST_RESULTS.md) for details.
+
+### Load Testing
+```bash
+# Load testing
+locust -f tests/load_test.py --host=http://localhost:8001
+```
+
+## 🐳 Docker Details
+
+### Services
+- **db**: PostgreSQL 15 with persistent volume
+- **api**: FastAPI application
+
+### Volumes
+- `postgres_data`: Persistent database storage
+
+### Networks
+- `wallet-network`: Internal communication
 
 ### Environment Variables
-```bash
-PORT=8000
-DATABASE_URL=sqlite:///wallet_service.db
+```env
+DATABASE_URL=postgresql+asyncpg://wallet_user:wallet_pass@db:5432/wallet_db
+ENVIRONMENT=production
+LOG_LEVEL=info
 ```
 
-### Railway Environment
-- **PORT**: Automatically set by Railway
-- **Database**: SQLite file created in container
+## 🚢 Deployment (Railway)
 
-## 🚀 Deployment Benefits
+### Steps
+1. Install Railway CLI: `npm i -g @railway/cli`
+2. Login: `railway login`
+3. Initialize: `railway init`
+4. Add PostgreSQL: `railway add`
+5. Deploy: `railway up`
 
-### Railway Features
-- ✅ **Automatic HTTPS**: SSL certificates provided
-- ✅ **Custom Domain**: Easy domain configuration
-- ✅ **Auto-scaling**: Built-in horizontal scaling
-- ✅ **Monitoring**: Railway dashboard with metrics
-- ✅ **Zero Downtime**: Rolling deployments
+### Environment Setup
+```bash
+# Railway will auto-detect Dockerfile
+# Set environment variable:
+DATABASE_URL=<railway-postgres-url>
+```
 
-### Production Readiness
-- ✅ **Health Checks**: Comprehensive monitoring
-- ✅ **Error Handling**: Graceful failure management
-- ✅ **Logging**: Structured logging for debugging
-- ✅ **Documentation**: Auto-generated API docs
+## 📊 Monitoring & Logging
 
-## 🎉 Summary
+- Structured JSON logging
+- Request/response logging
+- Transaction audit trail
+- Error tracking with stack traces
 
-This Internal Wallet Service demonstrates enterprise-grade backend development with:
+## 🔒 Security Considerations
 
-✅ **Complete Requirements Fulfillment**
-- All three transaction flows (topup, bonus, purchase)
-- Data seeding with assets, system accounts, and users
-- RESTful API with comprehensive endpoints
-- ACID compliance and data integrity
+- Input validation with Pydantic
+- SQL injection prevention (ORM)
+- Transaction amount limits
+- Rate limiting (configurable)
+- CORS configuration
 
-✅ **Advanced Engineering Excellence**
-- Ledger-based double-entry accounting
-- Sophisticated concurrency control
-- Full idempotency implementation
-- Railway-optimized deployment
+## 🎯 Performance
 
-✅ **Production-Ready Features**
-- Health monitoring and logging
-- Comprehensive error handling
-- Performance optimization
-- Security best practices
+- Async I/O for high concurrency
+- Connection pooling
+- Indexed queries
+- Batch operations support
 
-## 📞 Support
+## 📝 Data Seeding
 
-The service is fully functional and ready for production use on Railway with:
-- Complete API documentation at `/docs`
-- Health monitoring at `/health`
-- Comprehensive error handling
-- Railway dashboard integration
+The system comes pre-seeded with:
 
-**🚀 Ready for immediate Railway deployment!**
+**Asset Types:**
+- Gold Coins (in-game currency)
+- Diamonds (premium currency)
+- Loyalty Points (rewards)
+
+**System Account:**
+- Treasury (source/sink for all funds)
+
+**User Accounts:**
+- user_001: Alice (1000 Gold Coins, 100 Diamonds)
+- user_002: Bob (500 Gold Coins, 50 Loyalty Points)
+
+## 🛠️ Development
+
+```bash
+# Install dev dependencies
+pip install -r requirements-dev.txt
+
+# Format code
+black app/
+isort app/
+
+# Lint
+flake8 app/
+mypy app/
+
+# Database migrations (Alembic)
+alembic revision --autogenerate -m "Description"
+alembic upgrade head
+```
+
+## 📖 Project Structure
+
+```
+.
+├── app/
+│   ├── main.py              # FastAPI application entry
+│   ├── config.py            # Configuration management
+│   ├── database.py          # Database connection
+│   ├── models/              # SQLAlchemy models
+│   │   ├── account.py
+│   │   ├── asset_type.py
+│   │   ├── transaction.py
+│   │   └── ledger.py
+│   ├── schemas/             # Pydantic schemas
+│   ├── services/            # Business logic
+│   │   ├── wallet_service.py
+│   │   └── transaction_service.py
+│   ├── routers/             # API routes
+│   └── scripts/
+│       └── seed.py          # Database seeding
+├── tests/                   # Test suite
+├── alembic/                 # Database migrations
+├── Dockerfile
+├── docker-compose.yml
+├── requirements.txt
+└── README.md
+```
+
+## 🤝 Contributing
+
+This is an assignment project, but feedback is welcome!
+
+## 📄 License
+
+MIT License
+
+## 👤 Author
+
+Dino Ventures Backend Engineer Assignment
+
+## 🙏 Acknowledgments
+
+Built with modern best practices for production-grade wallet systems.
+
+---
+
+## 📚 Complete Documentation
+
+This project includes comprehensive documentation:
+
+| Document | Description |
+|----------|-------------|
+| [README.md](README.md) | Main project overview and setup guide (this file) |
+| [QUICKSTART.md](QUICKSTART.md) | Get started in 5 minutes |
+| [ARCHITECTURE.md](ARCHITECTURE.md) | Deep dive into system architecture |
+| [ARCHITECTURE_DIAGRAM.txt](ARCHITECTURE_DIAGRAM.txt) | ASCII architecture diagrams |
+| [DEPLOYMENT.md](DEPLOYMENT.md) | Railway deployment guide |
+| [API_EXAMPLES.md](API_EXAMPLES.md) | Comprehensive API usage examples |
+| [TEST_RESULTS.md](TEST_RESULTS.md) | Complete API testing results |
+| [PROJECT_SUMMARY.md](PROJECT_SUMMARY.md) | Executive summary and features |
+| [ASSIGNMENT_CHECKLIST.md](ASSIGNMENT_CHECKLIST.md) | Requirements verification |
+
+## 🔗 Quick Links
+
+- **📖 API Documentation:** [http://localhost:8001/docs](http://localhost:8001/docs)
+- **📊 Test Results:** [TEST_RESULTS.md](TEST_RESULTS.md)
+- **🏗️ Architecture:** [ARCHITECTURE.md](ARCHITECTURE.md)
+- **🚀 Quick Start:** [QUICKSTART.md](QUICKSTART.md)
+- **☁️ Deploy:** [DEPLOYMENT.md](DEPLOYMENT.md)
+
+---
+
+## 🎯 Project Status
+
+✅ **Production Ready**
+- All core requirements implemented
+- All bonus features completed
+- 100% endpoint test coverage
+- Comprehensive documentation
+- Docker containerized
+- Railway deployment ready
+
+**Build Date:** 2026-02-08  
+**Version:** 1.0.0  
+**Status:** ✅ Complete & Tested
