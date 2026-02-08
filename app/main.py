@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import select, text
 from typing import List
 import logging
+import os
 
 from app.database import get_db, engine
 from app.models import Base, Asset, Wallet
@@ -12,17 +13,16 @@ from app.schemas import (
     ErrorResponse, Asset as AssetSchema
 )
 from app.wallet_service import WalletService
+from app.startup import initialize_database
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Create database tables
-Base.metadata.create_all(bind=engine)
-
+# Create FastAPI app
 app = FastAPI(
-    title="Dino Ventures Internal Wallet Service",
-    description="A high-performance wallet service for gaming and loyalty platforms",
+    title="Dino Ventures Wallet Service",
+    description="Internal wallet service for gaming platforms",
     version="1.0.0"
 )
 
@@ -34,6 +34,18 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+@app.on_event("startup")
+async def startup_event():
+    """Initialize database on startup"""
+    logger.info("🚀 Starting Dino Ventures Wallet Service...")
+    
+    # Initialize database tables and seed data
+    if initialize_database():
+        logger.info("✅ Database initialization completed")
+    else:
+        logger.error("❌ Database initialization failed")
+        # Don't raise exception to allow service to start for debugging
 
 @app.get("/")
 async def root():
